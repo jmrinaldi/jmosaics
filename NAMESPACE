@@ -1,0 +1,4 @@
+import(mosaics)
+export(jmosaicsPattern,
+readBinsMultiple
+    )
