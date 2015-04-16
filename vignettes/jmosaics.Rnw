@@ -1,0 +1,183 @@
+% -*- mode: noweb; noweb-default-code-mode: R-mode; -*-
+\documentclass[11pt]{article}
+%% Set my margins
+\setlength{\oddsidemargin}{0.0truein}
+\setlength{\evensidemargin}{0.0truein}
+\setlength{\textwidth}{6.5truein}
+\setlength{\topmargin}{0.0truein}
+\setlength{\textheight}{9.0truein}
+\setlength{\headsep}{0.0truein}
+\setlength{\headheight}{0.0truein}
+\setlength{\topskip}{0pt}
+%% End of margins
+
+\usepackage{subfigure}
+
+%%\pagestyle{myheadings}
+%%\markboth{$Date$\hfil$Revision$}{\thepage}
+\usepackage[pdftex,
+bookmarks, 
+bookmarksopen,
+pdfauthor={Xin Zeng, Sunduz Keles},
+pdftitle={jmosaics Vignette}]
+{hyperref}
+
+\title{Joint Analysis of Multiple ChIP-seq Datasets with the `jmosaics' Package}
+\author{Xin Zeng$^1$ and S\"und\"uz  Kele\c{s}$^{1,2}$\\
+$^1$Department of Statistics, University of Wisconsin Madison, WI \\
+$^2$Department of Statistics and of Biostatistics and Medical Informatics,\\ University of Wisconsin, Madison, WI\\}
+
+\date{\today}
+
+\SweaveOpts{engine=R, echo=TRUE, pdf=TRUE}
+
+\begin{document}
+%\VignetteIndexEntry{jMOSAiCS}
+%\VignetteKeywords{jMOSAiCS}
+%\VignettePackage{jmosaics}
+\maketitle
+
+\tableofcontents
+
+\section{Overview}
+This document provides an introduction to the joint analysis of multiple ChIP-seq datasets with the `jmosaics' package. R
+package `jmosaics' implements jMOSAiCS: Joint Analysis of Multiple ChIP-seq Datasets, proposed in \cite{jmosaics}. 
+It detects combinatorial enrichment patterns across multiple ChIP-seq datasets and 
+is applicable with ChIP-seq data of both transcription factor binding and histone modifications. In this document, we use data from a  ChIP-
+seq experiment of H3K27me3 and H3K4me1 in G1E cells \cite{Wu2011Dynamics} as  described in our manuscript.
+ For illustration purposes, we only utilize reads mapping to chromosome 10.
+The package can be loaded with the command:
+
+<<preliminaries,echo=FALSE,results=hide>>=
+options(prompt = "R> ")
+@
+
+<<jmosaics-prelim>>=
+library("jmosaics")
+@
+
+
+\section{\textbf{Workflow}}
+'jmosaics' utilizes  R package 'mosaics'\cite{Kuan09} for part of model fitting. We therefore start with an overview of the relevant 'mosaics' functions for reading in  data and model fitting.
+
+\subsection{readBins}
+This function from package  `mosaics' is used to read bin-level data into the R Environment.   Bin-level data is easily obtained from the aligned read files by the constructBin function of the 'mosaics' package. constructBin supports multiple alignment formats from the Eland and Bowtie aligners.
+'jmosaics' currently allows two-sample analysis with ChIP and control (input) data and also two-sample analysis with mappability and GC features in addition to ChIP and input data.
+%For the multiple datasets, if one dataset is read into R with ambiguity score, then all data need to be read into R with ambiguity score to make everything consistency. 
+The following reads in ChIP and input bin-level data for a single experiment, this is a toy example to show how to read into bin files and create a bin list for the further analysis. 
+<<toy example,eval=FALSE>>=
+bin1_toy=readBins(type = c("chip","input"),
+fileName = c(system.file(file.path("extdata","h3k27me3_chip_chr10.txt"),
+package="jmosaics"),
+system.file(file.path("extdata","h3k27me3_input_chr10.txt"),
+package="jmosaics")))
+bin2_toy <- readBins(type = c("chip","input"),
+fileName = c(system.file(file.path("extdata","h3k4me1_chip_chr10.txt"),
+package="jmosaics"),
+system.file(file.path("extdata","h3k4me1_input_chr10.txt"),
+package="jmosaics")))
+origin_bin_toy=list(bin1_toy,bin2_toy)
+@
+
+%For the two-sample analysis that adjusts for mappability and GC biases, preprocessed bin-level ChIP data, control sample data, mappability score, GC content
+%score, and sequence ambiguity score are needed : 
+
+<<loadTextData, eval=FALSE>>=
+bin1_toy <- readBins(type = c("chip", "input"), 
+    fileName = c("h3k27me3_chip_chr10.txt",
+    "h3k27me3_input_chr10.txt"))
+bin2_toy <- readBins(type = c("chip", "input"), 
+    fileName = c("h3k4me1_chip_chr10.txt",
+    "h3k4me1_input_chr10.txt"))
+origin_bin_toy <- list(bin1_toy,bin2)
+@
+
+\subsection{readBinsMultiple}
+This function  matches the bin coordinates of multiple ChIP-seq datasets. A list of bin-level data  ('origin$\_$bin' below)  is used as 
+input. 
+
+<<load data>>=
+data("jmosaics_example_data")
+@
+<<readBinsMultiple>>=
+bin<- readBinsMultiple(origin_bin)
+str(bin)
+@
+The output ('bin') is a list of all the bin-level data  with matching bin coordinates.
+\subsection{mosaicsFit}
+We are now ready to fit a MOSAiCS model using the mosaicsFit function from the `mosaics' package. Each bin-level data in the list (e.g., bin$[[1]]$) is used as 
+input. A MOSAiCS model is fitted with the command:
+<<Fit by mosaics>>=
+fit1 <- mosaicsFit(bin[[1]], analysisType = "IO", bgEst="automatic")
+fit2 <- mosaicsFit(bin[[2]], analysisType = "IO", bgEst="automatic")
+@
+`\texttt{analysisType="IO"}' indicates implementation of the two-sample analysis. `\texttt{bgEst}' argument determines background estimation approach.
+`\texttt{bgEst="matchLow"}' estimates background distribution using only bins with low tag counts and `\texttt{bgEst="rMOM"}' estimates background distribution using robust method of moment (MOM) can be tried if the goodness of fit obtained using `\texttt{bgEst="automatic"}' is not satisfactory and it might improve the model fit. 
+
+After fitting each dataset separately, an R list should be generated as follows:
+<<Create an input list for jmosaics>>=
+fit <- list(fit1, fit2) 
+@
+This list of 'mosaics' object fits is the main input for detecting enrichment patterns with 'jmosaics'.
+\subsection{jmosaicsPattern}  
+This is the main function for obtaining enriched regions and combinatorial enrichment patterns.  It allows false discovery rate control through the  `\texttt{FDR}' parameter and filtering with respect to a minimum average ChIP tag count across the bins within a region through the `\texttt{thres}' parameter  for the $B$- and $E$-layer analyses. 
+When $B$ variable is 1, the region is enriched in at least one of the datasets.
+We first use the posterior probability of the region-specific $B$ variables for false discovery rate control and 
+then refine initial set of enriched regions  by `\texttt{thres}'. Initial regions 
+which satisfy the minimum average ChIP tag count  requirement as implied by   `\texttt{thres}' variable  in at least one dataset are reported in the object `B$\_$peak'. 
+$E$-layer analysis declares enrichment for each dataset separately based on posterior probabilities of the region- and dataset-specific $E$ variables and the average ChIP tag counts. 
+The combinatorial enrichment pattern is then assigned as the pattern with the maximum joint posterior probability  of the $E$ variables. For $D$ datasets, we can  observe up to $2^D$  enrichment patterns for a  genomic  region. For example, for $D=2$, $\{(0, 0), (0,1), (1,0), (1,1)\}$ denote the set of possible patterns: $(0,0)$: not enriched in either of the samples; $(1,0)$: enriched only in sample 1; $(0, 1)$: enriched only in sample 2; $(1,1)$: enriched in both samples. 
+
+<<jmosaicsPattern>>=
+result<-jmosaicsPattern(fit, region_length=1, FDR=0.05, thres=c(10,10), 
+type=c('B', 'E', 'Pattern'), patternInfo='FALSE')
+@
+
+<<see all result>>=str(result)
+@
+For example, chr10: 5018000-5018600, which includes three enriched bins for both H3k4m1 and H3k27m3 datasets, can be accessed through
+element `Pattern' of the jmosaics list for the result:
+<<see pattern result>>= 
+id=which(result$Pattern[,2]==5018000)
+result$Pattern[id:(id+2),]
+@
+These three enriched bins are also listed in the  object `E$\_$LAYER'  for each dataset.
+<<see E_layer result>>= 
+id=which(result$E_LAYER[[1]][,2]==5018000)
+result$E_LAYER[[1]][id:(id+2),]
+
+ id=which(result$E_LAYER[[2]][,2]==5018000)
+result$E_LAYER[[2]][id:(id+2),]
+@    
+These bins are also reported in object `B$\_$LAYER'.
+<<see B_layer result>>= 
+id=which(result$B_LAYER[,2]==5018000)
+result$B_LAYER[id:(id+2),]
+@    
+
+
+Plotting functionality for the 'jmosaics' package is supported by the 'dpeak' package. This package can be used to extract reads corresponding to specified regions ('dpeakRead' function) and generate coverage plots  as in Figure 1.
+\begin{figure}[tb]
+\begin{center}
+\includegraphics[scale=0.5]{jmosaics-h3k4me1_g1e-plot.pdf}
+
+\caption{Raw data plot of region chr1: $5018000 - 5018600$.} 
+
+\end{center}
+\end{figure}
+
+\begin{figure}[tb]
+\begin{center}
+\includegraphics[scale=0.5]{jmosaics-h3k27me3_g1e-plot.pdf}
+
+\caption{Raw data plot of region chr1: $5018000 - 5018600$.} 
+
+\end{center}
+\end{figure}
+      
+        
+
+\bibliographystyle{unsrt}
+\bibliography{chipseq_BIG}
+
+\end{document}

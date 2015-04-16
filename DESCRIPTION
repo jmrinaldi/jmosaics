@@ -1,0 +1,13 @@
+Package: jmosaics
+Type: Package
+Title: Joint analysis of multiple ChIP-Seq data sets
+Version: 1.8.0
+Date: 2013-01-29
+Author: Xin Zeng
+Maintainer: Xin Zeng <xinzeng@stat.wisc.edu>
+Depends: R (>= 2.15.2), mosaics
+Description: jmosaics detects enriched regions of ChIP-seq data sets
+        jointly.
+License: GPL (>= 2)
+LazyLoad: yes
+biocViews: ChIPSeq, Sequencing, Transcription, Genetics
