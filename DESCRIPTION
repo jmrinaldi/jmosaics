@@ -1,7 +1,7 @@
 Package: jmosaics
 Type: Package
 Title: Joint analysis of multiple ChIP-Seq data sets
-Version: 1.9.0
+Version: 1.10.0
 Date: 2013-01-29
 Author: Xin Zeng
 Maintainer: Xin Zeng <xinzeng@stat.wisc.edu>
